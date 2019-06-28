@@ -72,6 +72,7 @@ class Builder extends EloquentBuilder
     public function insert(array $values)
     {
         list($values, $i18nValues) = $this->filterValues($values);
+
         if($this->query->insert($values)) {
             return $this->insertI18n($i18nValues, $values[$this->model->getKeyName()]);
         }
@@ -140,39 +141,8 @@ class Builder extends EloquentBuilder
                 unset($values[$key]);
             }
         }
-        $tmpValues = $values;
-        foreach ($tmpValues as $key => $value) {
-            if (strstr($key, ':') !== false) {
-                [$attribute, $locale] = explode(':', $key);
-                if(in_array($attribute, $attributes)) {
-                    $translatable[$key] = $values[$key];
-    
-                    unset($values[$key]);
-                }
-            }
-        }
-        return [$values, $translatable];
-    }
 
-    protected function splitLanguages(array $values) {
-        $attributes = collect($values);
-        $translatables = $attributes->filter(function ($value, $key) {
-            return strstr($key, ':') !== false ;
-        });
-        $localizedAttributes = $translatables->toArray();
-        $attributes = $attributes->forget(array_keys($localizedAttributes))->toArray();
-        $localizedValues = $attributes;
-        $localizedValues['locales'] = [];
-        foreach ($localizedAttributes as $ka => $va) {
-            if (strstr($ka, ':') !== false) {
-                [$attribute, $locale] = explode(':', $ka);
-                if (!isset($localizedValues['locales'][$locale])) {
-                    $localizedValues['locales'][$locale] = [];
-                }
-                $localizedValues['locales'][$locale][$attribute] = $va;    
-            }
-        }
-        return $localizedValues;
+        return [$values, $translatable];
     }
 
     /**
@@ -180,29 +150,16 @@ class Builder extends EloquentBuilder
      * @param mixed $key
      * @return bool
      */
-    protected function insertI18n(array $values, $key, $lang = null)
+    protected function insertI18n(array $values, $key)
     {
         if(count($values) == 0) {
             return true;
         }
 
-        $values = $this->splitLanguages($values);
-        $locales = [];
-        if (isset($values['locales'])) {
-            $locales = $values['locales'];
-            unset($values['locales']);
-        }
-        if (count($values) > 0) {
-            $values[$this->model->getForeignKey()] = $key;
-            $values[$this->model->getLocaleKey()] = $lang == null ? $this->model->getLocale() : $lang;
-            $result = $this->i18nQuery()->insert($values);    
-        }
-        foreach ($locales as $lang => $value) {
-            $value[$this->model->getForeignKey()] = $key;
-            $value[$this->model->getLocaleKey()] = $lang;
-            $result = $this->updateI18nItem($value, $key, $lang);
-        }
-        return $result;
+        $values[$this->model->getForeignKey()] = $key;
+        $values[$this->model->getLocaleKey()] = $this->model->getLocale();
+
+        return $this->i18nQuery()->insert($values);
     }
 
     /**
@@ -221,22 +178,6 @@ class Builder extends EloquentBuilder
         return $query->update($values);
     }
 
-    protected function updateI18nItem(array $values, $id, $lang = null)
-    {
-        $updated = 0;
-        $query = $this->i18nQuery()
-        ->whereOriginal($this->model->getForeignKey(), $id)
-        ->whereOriginal($this->model->getLocaleKey(), $lang);
-
-        if($query->exists()) {
-            unset($values[$this->model->getLocaleKey()]);
-            $updated += $query->update($values);
-        } else {
-            $updated += $this->insertI18n($values, $id, $lang);
-        }
-        return $updated;
-    }
-
     /**
      * @param array $values
      * @param array $ids
@@ -248,21 +189,19 @@ class Builder extends EloquentBuilder
             return true;
         }
 
-        $values = $this->splitLanguages($values);
-        $locales = [];
-        if (isset($values['locales'])) {
-            $locales = $values['locales'];
-            unset($values['locales']);
-        }
-        if (count($values) > 0) {
-            foreach($ids as $id) {
-                $updated = $this->updateI18nItem($values, $id, $this->model->getLocale());
+        $updated = 0;
+
+        foreach($ids as $id) {
+            $query = $this->i18nQuery()
+                ->whereOriginal($this->model->getForeignKey(), $id)
+                ->whereOriginal($this->model->getLocaleKey(), $this->model->getLocale());
+
+            if($query->exists()) {
+                unset($values[$this->model->getLocaleKey()]);
+                $updated += $query->update($values);
+            } else {
+                $updated += $this->insertI18n($values, $id);
             }
-        }
-        foreach ($locales as $lang => $value) {
-            $value[$this->model->getForeignKey()] = $key;
-            $value[$this->model->getLocaleKey()] = $lang;
-            $updated = $this->updateI18nItem($value, $key, $lang);
         }
 
         return $updated;
@@ -276,6 +215,7 @@ class Builder extends EloquentBuilder
     public function i18nQuery()
     {
         $query = $this->getModel()->newQueryWithoutScopes()->getQuery();
+
         $query->from($this->model->getI18nTable());
 
         return $query;
