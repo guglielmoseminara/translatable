@@ -21,11 +21,36 @@ trait Translatable
      */
     protected static $i18nAttributes = [];
 
+    protected $localizedValues = [];
+
     /**
      * Boot the trait.
      */
     public static function bootTranslatable()
     {
+        static::saving(function($model){
+            $attributes = collect($model->attributes);
+            $translatables = $attributes->filter(function ($value, $key) {
+                return strstr($key, ':') !== false ;
+            });
+            $localizedAttributes = $translatables->toArray();
+            $attributes = $attributes->forget(array_keys($localizedAttributes))->toArray();
+            $localizedValues = [];
+            foreach ($localizedAttributes as $ka => $va) {
+                if (strstr($ka, ':') !== false) {
+                    [$attribute, $locale] = explode(':', $ka);
+                    if (!isset($localizedValues[$locale])) {
+                        $localizedValues[$locale] = [];
+                    }
+                    $localizedValues[$locale][$attribute] = $va;    
+                }
+            }
+            $model->localizedValues = $localizedValues;
+            $model->attributes = $attributes;
+        });
+        static::saved(function($model){
+            $model->saveTranslations($model->localizedValues);
+        });
         static::addGlobalScope(new TranslatableScope);
     }
 
@@ -127,7 +152,6 @@ trait Translatable
     {
         $success = true;
         $fresh = parent::fresh();
-
         foreach ($translations as $locale => $attributes) {
             $model = clone $fresh;
             $model->setLocale($locale);
