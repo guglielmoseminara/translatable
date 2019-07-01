@@ -23,6 +23,19 @@ trait Translatable
 
     protected $localizedValues = [];
 
+    public function initializeTranslatable() {
+        $fillable = $this->fillable;
+        $locales = config('app.locales');
+        foreach ($fillable as $field) {
+            if (in_array($field, $this->translatable)) {
+                foreach ($locales as $lang) {
+                    $fillable[] = $field.':'.$lang;
+                }
+            }
+        }
+        $this->fillable = $fillable;
+    }
+
     /**
      * Boot the trait.
      */
