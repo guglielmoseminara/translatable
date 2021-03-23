@@ -1,6 +1,7 @@
 {
   "name": "guglielmoseminara/translatable",
   "description": "Translatable eloquent models.",
+  "version": "2.0.0",
   "keywords": ["translatable", "eloquent", "laravel", "model", "translate", "i18n"],
   "license": "MIT",
   "authors": [
