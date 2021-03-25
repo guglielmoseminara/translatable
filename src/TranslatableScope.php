@@ -7,6 +7,7 @@ use Illuminate\Database\Query\Grammars\Grammar;
 use Illuminate\Database\Eloquent\Model as Eloquent;
 use Illuminate\Database\Query\Grammars\SqlServerGrammar;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Support\Str;
 
 class TranslatableScope implements Scope
 {
@@ -34,7 +35,7 @@ class TranslatableScope implements Scope
         $this->i18nTable = $model->getI18nTable();
         $this->fallback = $model->getFallbackLocale();
 
-        if(!starts_with($this->table, 'laravel_reserved_')) {
+        if(!Str::startsWith($this->table, 'laravel_reserved_')) {
             $this->createJoin($builder, $model);
             $this->createWhere($builder, $model);
             $this->createSelect($builder, $model);
